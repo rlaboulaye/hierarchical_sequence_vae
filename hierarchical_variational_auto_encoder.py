@@ -165,7 +165,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             test_error_rates = []
         return train_losses, test_losses, train_error_rates, test_error_rates
 
-    def train_vae(self, num_epochs=100, train_epoch_size=950, test_epoch_size=50, learning_rate=1e-5, batch_size=16):
+    def train_vae(self, num_epochs=100, train_epoch_size=4750, test_epoch_size=250, learning_rate=1e-5, batch_size=16):
         optimizer = torch.optim.Adam(itertools.chain(self.encoder.parameters(), self.decoder.parameters()), lr=learning_rate)
         train_losses, test_losses, train_error_rates, test_error_rates = self._get_vae_history()
         test_split_ratio = test_epoch_size / float(train_epoch_size + test_epoch_size)
