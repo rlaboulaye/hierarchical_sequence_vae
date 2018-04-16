@@ -47,7 +47,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         self.max_sentence_length = max_sentence_length
         self.min_paragraph_length = min_paragraph_length
         self.max_paragraph_length = max_paragraph_length
-        self.identifier = '{}tokens_{}mins_{}maxs_{}minp_{}maxp_{}hidden_{}layers_{}'.format(self.vocab_size, \
+        self.identifier = '{}tokens_{}smin_{}smax_{}pmin_{}pmax_{}hidden_{}layers_{}'.format(self.vocab_size, \
                 self.min_sentence_length, self.max_sentence_length, self.min_paragraph_length, self.max_paragraph_length, \
                 self.encoder_hidden_dimension, self.num_layers, \
                 'contextenhancedrnn' if use_context_enhanced_rnn else 'simplernn')
