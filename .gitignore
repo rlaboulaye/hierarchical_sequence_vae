@@ -1,0 +1,7 @@
+*.pyc
+*.tar
+glove.txt
+books_txt_full
+books_in_sentences
+books_txt_full.txt
+books_in_sentences.txt
