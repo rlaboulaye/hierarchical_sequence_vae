@@ -206,9 +206,9 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence]
             sequence_of_indexed_batches = [get_variable(torch.LongTensor(self.embeddings.index_batch(batch))) for batch in sequence]
 
-            logits, predictions = self._vae_forward(sequence_of_embedded_batches, batch_size, len(sequence))
+            logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, len(sequence))
 
-            loss = self.vae_loss(logits, sequence_of_indexed_batches)
+            loss = self.vae_loss(logits, sequence_of_indexed_batches, mu, logvar)
             losses.append(loss.cpu().data.numpy())
 
             error_rate = self.vae_error_rate(predictions, sequence_of_indexed_batches)
@@ -226,9 +226,10 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         return losses, error_rates
 
     def _vae_forward(self, sequence_of_embedded_batches, batch_size, sequence_length=None):
-        mu, std = self.encoder(sequence_of_embedded_batches, batch_size)
+        mu, logvar = self.encoder(sequence_of_embedded_batches, batch_size)
         z = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
+        std = torch.exp(0.5 * logvar)
         context = z * std + mu
         logits, predictions = self.decoder(context, self.embeddings, self.embeddings.get_index('.'), \
                 sequence_length, batch_size)
-        return logits, predictions
+        return logits, predictions, mu, logvar

@@ -41,8 +41,7 @@ class Encoder(nn.Module):
 		sequence_embedding = torch.cat((forward_h_tm1[-1], backward_h_tm1[-1]), dim=-1)
 		mu = self.mean_extractor(sequence_embedding)
 		logvar = self.logvar_extractor(sequence_embedding)
-		std = torch.exp(0.5 * logvar)
-		return mu, std
+		return mu, logvar
 
 	def increment_step(self, step_count=1, batch_size=16):
 		self.step_count += step_count
