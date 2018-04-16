@@ -23,7 +23,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         self,
         vocab_size=1000,
         input_dimension=300,
-        hidden_dimension=256,
+        hidden_dimension=512,
         num_layers=3,
         use_context_enhanced_rnn=False,
         use_pretrained_weights=False,
@@ -39,8 +39,8 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         self.vocab_size = vocab_size
         self.input_dimension = input_dimension
         self.encoder_hidden_dimension = hidden_dimension
-        self.decoder_hidden_dimension = hidden_dimension * 2
-        self.guide_hidden_dimension = hidden_dimension * 2
+        self.decoder_hidden_dimension = hidden_dimension
+        self.guide_hidden_dimension = hidden_dimension
         self.num_layers = num_layers
         self.use_pretrained_weights = use_pretrained_weights
         self.min_sentence_length = min_sentence_length
@@ -226,7 +226,9 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         return losses, error_rates
 
     def _vae_forward(self, sequence_of_embedded_batches, batch_size, sequence_length=None):
-        context = self.encoder(sequence_of_embedded_batches, batch_size)
+        mu, std = self.encoder(sequence_of_embedded_batches, batch_size)
+        z = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
+        context = z * std + mu
         logits, predictions = self.decoder(context, self.embeddings, self.embeddings.get_index('.'), \
                 sequence_length, batch_size)
         return logits, predictions
