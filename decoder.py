@@ -32,7 +32,7 @@ class Decoder(nn.Module):
             module.apply(initialize_weights)
 
     def forward(self, context, embedding_dict, eos_index, training_sequence_length=None, batch_size=16):
-        hidden_tm1 = context.repeat(batch_size, 1)
+        hidden_tm1 = context.repeat(self.num_layers, 1).view(self.num_layers, batch_size, -1)
         input_t = get_variable(torch.FloatTensor([embedding_dict[embedding_dict.get_word(eos_index)]] * batch_size))
         word_indices = [-1] * batch_size
         sequence_of_indices = []
