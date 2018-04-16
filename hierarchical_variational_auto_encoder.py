@@ -60,7 +60,6 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         self.vae_error_rate = ErrorRate()
         self.guide_loss = nn.L1Loss()
         self._init_cuda()
-        self._load_data()
 
     def _init_paths(self):
         self.encoder_weights = 'weights/' + self.identifier + '_encoder.weights'
