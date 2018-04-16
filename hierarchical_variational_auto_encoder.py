@@ -193,8 +193,8 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
                 test_loss, test_error_rate = self._vae_epoch(test_loaders, sentence_length_indices, batch_size, None)
                 test_losses += test_loss
                 test_error_rates += test_error_rate
-                np.save(self.vae_train_loss_path, np.array(test_losses))
-                np.save(self.vae_train_error_path, np.array(test_error_rates))
+                np.save(self.vae_test_loss_path, np.array(test_losses))
+                np.save(self.vae_test_error_path, np.array(test_error_rates))
             print('Elapsed Time: {}\n'.format(time.time() - start_time))
 
     def _vae_epoch(self, loaders, sentence_length_indices, batch_size, optimizer=None):
