@@ -42,6 +42,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         self.decoder_hidden_dimension = hidden_dimension * 2
         self.guide_hidden_dimension = hidden_dimension * 2
         self.num_layers = num_layers
+        self.use_pretrained_weights = use_pretrained_weights
         self.min_sentence_length = min_sentence_length
         self.max_sentence_length = max_sentence_length
         self.min_paragraph_length = min_paragraph_length
@@ -168,13 +169,14 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         optimizer = torch.optim.Adam(itertools.chain(self.encoder.parameters(), self.decoder.parameters()), lr=learning_rate)
         train_losses, test_losses, train_error_rates, test_error_rates = self._get_vae_history()
         test_split_ratio = test_epoch_size / float(train_epoch_size + test_epoch_size)
-        train_data_loaders, test_data_loaders = self.get_sentence_data_loaders(batch_size, test_split_ratio)
-        train_lengths = np.array([len(data_loader) for data_loader in train_data_loaders], dtype=np.float32)
-        test_lengths = np.array([len(data_loader) for data_loader in test_data_loaders], dtype=np.float32)
+        train_loaders, test_loaders = self._get_sentence_data_loaders(batch_size, test_split_ratio)
+        train_lengths = np.array([len(data_loader) for data_loader in train_loaders], dtype=np.float32)
+        test_lengths = np.array([len(data_loader) for data_loader in test_loaders], dtype=np.float32)
         print('Train VAE')
         start_time = time.time()
-        for e in xrange(num_epochs):
+        for e in range(num_epochs):
             print('Epoch {}'.format(e))
+            print('Train')
             sentence_length_indices = np.random.multinomial(1, \
                     .9999 * train_lengths / np.sum(train_lengths), size=(train_epoch_size)).argmax(axis=1)
             train_loss, train_error_rate = self._vae_epoch(train_loaders, sentence_length_indices, batch_size, optimizer)
@@ -185,6 +187,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             np.save(self.vae_train_loss_path, np.array(train_losses))
             np.save(self.vae_train_error_path, np.array(train_error_rates))
             if test_epoch_size > 0:
+                print('Test')
                 sentence_length_indices = np.random.multinomial(1, \
                         .9999 * test_lengths / np.sum(test_lengths), size=(test_epoch_size)).argmax(axis=1)
                 test_loss, test_error_rate = self._vae_epoch(test_loaders, sentence_length_indices, batch_size, None)
@@ -199,16 +202,16 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         error_rates = []
         for index in sentence_length_indices:
             loader = loaders[index]
-            sequence = next(loader)
-            sequence_of_embedded_batches = [get_variable(self.embeddings.embed_batch(batch)) for batch in sequence]
-            sequence_of_indexed_batches = [get_variable(self.embeddings.index_batch(batch)) for batch in sequence]
+            sequence = next(iter(loader))
+            sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence]
+            sequence_of_indexed_batches = [get_variable(torch.LongTensor(self.embeddings.index_batch(batch))) for batch in sequence]
 
-            logits, predictions = self._forward(sequence_of_embedded_batches, batch_size, len(sequence))
+            logits, predictions = self._vae_forward(sequence_of_embedded_batches, batch_size, len(sequence))
 
             loss = self.vae_loss(logits, sequence_of_indexed_batches)
             losses.append(loss.cpu().data.numpy())
 
-            error_rate = self.vae_error_rate(np.array(predictions), sequence_of_indexed_batches)
+            error_rate = self.vae_error_rate(predictions, sequence_of_indexed_batches)
             error_rates.append(error_rate.cpu().data.numpy())
 
             if optimizer is not None:
@@ -223,7 +226,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         return losses, error_rates
 
     def _vae_forward(self, sequence_of_embedded_batches, batch_size, sequence_length=None):
-        context = self.encoder(sequence_of_embedded_batches)
+        context = self.encoder(sequence_of_embedded_batches, batch_size)
         logits, predictions = self.decoder(context, self.embeddings, self.embeddings.get_index('.'), \
                 sequence_length, batch_size)
-        return predictions, logits
+        return logits, predictions

@@ -18,8 +18,8 @@ class Encoder(nn.Module):
 		self.step_count = 0
 		self.example_count = 0
 
-	def forward(self, input_sequence):
-		h_0 = get_variable(torch.FloatTensor(np.zeros((self.num_layers, self.batch_size, self.hidden_dimension))))
+	def forward(self, input_sequence, batch_size=16):
+		h_0 = get_variable(torch.FloatTensor(np.zeros((self.num_layers, batch_size, self.hidden_dimension))))
 		forward_h_tm1 = h_0
 		backward_h_tm1 = h_0
 		sequence_length = len(input_sequence)

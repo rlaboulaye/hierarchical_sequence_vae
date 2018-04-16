@@ -6,7 +6,7 @@ class SequenceVariationalLoss(nn.Module):
 
 	def __init__(self, element_loss=CrossEntropyLoss):
 		super(SequenceVariationalLoss, self).__init__()
-		self.element_loss = element_loss(ignore_index=-1)
+		self.element_loss = element_loss()
 
 	def forward(self, sequence_of_logits, sequence_of_targets):
 		losses = []

@@ -11,5 +11,5 @@ class ErrorRate(nn.Module):
 		error_rates = []
 		for predictions, targets in zip(sequence_of_predictions, sequence_of_targets):
 			errors = (predictions != targets)
-			error_rates.append(errors.mean())
+			error_rates.append(errors.float().mean())
 		return np.mean(error_rates)
