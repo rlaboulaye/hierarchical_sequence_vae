@@ -19,7 +19,7 @@ class Decoder(nn.Module):
         self.step_count = 0
         self.example_count = 0
         self.fc = nn.Linear(self.hidden_dimension, self.output_dimension)
-        self.generating_activation = nn.Softmax(dim=0)
+        self.generating_activation = nn.Softmax(dim=1)
         if self.context_dimension is None:
             self.rnn = RNN(self.input_dimension, self.hidden_dimension, self.num_layers)
         else:
