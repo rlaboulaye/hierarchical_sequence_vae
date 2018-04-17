@@ -208,7 +208,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
 
             logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, len(sequence))
 
-            loss = self.vae_loss(logits, sequence_of_indexed_batches, mu, logvar)
+            loss = self.vae_loss(logits, sequence_of_indexed_batches, mu, logvar, self.decoder.step_count)
             losses.append(loss.cpu().data.numpy())
 
             error_rate = self.vae_error_rate(predictions, sequence_of_indexed_batches)

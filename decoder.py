@@ -56,4 +56,3 @@ class Decoder(nn.Module):
     def increment_step(self, step_count=1, batch_size=16):
         self.step_count += step_count
         self.example_count += step_count * batch_size
-        
