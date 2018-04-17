@@ -178,7 +178,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             print('Epoch {}'.format(e))
             print('Train')
             sentence_length_indices = np.random.multinomial(1, \
-                    .9999 * train_lengths / np.sum(train_lengths), size=(train_epoch_size)).argmax(axis=1)
+                    .9999 * train_lengths / float(np.sum(train_lengths)), size=(train_epoch_size)).argmax(axis=1)
             train_loss, train_error_rate = self._vae_epoch(train_loaders, sentence_length_indices, batch_size, optimizer)
             train_losses += train_loss
             train_error_rates += train_error_rate
@@ -189,7 +189,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             if test_epoch_size > 0:
                 print('Test')
                 sentence_length_indices = np.random.multinomial(1, \
-                        .9999 * test_lengths / np.sum(test_lengths), size=(test_epoch_size)).argmax(axis=1)
+                        .9999 * test_lengths / float(np.sum(test_lengths)), size=(test_epoch_size)).argmax(axis=1)
                 test_loss, test_error_rate = self._vae_epoch(test_loaders, sentence_length_indices, batch_size, None)
                 test_losses += test_loss
                 test_error_rates += test_error_rate
