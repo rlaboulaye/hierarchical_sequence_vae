@@ -16,7 +16,7 @@ class SequenceVariationalLoss(nn.Module):
 		return (math.tanh((iteration - 3500) / 1000) + 1) / 2
 
 	def kld_loss(self, mu, logvar):
-		return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+		return (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)).mean()
 
 	def forward(self, sequence_of_logits, sequence_of_targets, mu, logvar, iteration):
 		losses = []
