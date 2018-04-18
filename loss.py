@@ -19,11 +19,12 @@ class SequenceVariationalLoss(nn.Module):
 		return (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)).mean()
 
 	def forward(self, sequence_of_logits, sequence_of_targets, mu, logvar, iteration):
-		losses = []
+		reconstruction_losses = []
 		for logits, targets in zip(sequence_of_logits, sequence_of_targets):
 			batch_reconstruction_loss = self.reconstruction_loss(logits, targets)
-			batch_kld_loss = self.kld_loss(mu, logvar)
-			batch_loss = (self.reconstruction_coefficient * batch_reconstruction_loss) + \
-					(self._get_kld_coefficient(iteration) * batch_kld_loss)
-			losses.append(batch_loss)
-		return np.mean(losses)
+			reconstruction_losses.append(batch_reconstruction_loss)
+		kld_loss = self.kld_loss(mu, logvar)
+		reconstruction_loss = torch.cat(reconstruction_losses).mean()
+		loss = (self.reconstruction_coefficient * reconstruction_loss) + \
+				(self._get_kld_coefficient(iteration) * kld_loss)
+		return loss
