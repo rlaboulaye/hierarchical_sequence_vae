@@ -155,14 +155,14 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             train_losses = np.load(self.vae_train_loss_path).tolist()
             train_error_rates = np.load(self.vae_train_error_path).tolist()
         else:
-            train_losses = []
+            train_losses = [[],[],[]]
             train_error_rates = []
 
         if self.use_pretrained_weights and os.path.exists(self.vae_test_loss_path) and os.path.exists(self.vae_test_error_path):
             test_losses = np.load(self.vae_test_loss_path).tolist()
             test_error_rates = np.load(self.vae_test_error_path).tolist()
         else:
-            test_losses = []
+            test_losses = [[],[],[]]
             test_error_rates = []
         return train_losses, test_losses, train_error_rates, test_error_rates
 
@@ -180,8 +180,10 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             print('Train')
             sentence_length_indices = np.random.multinomial(1, \
                     .9999 * train_lengths / float(np.sum(train_lengths)), size=(train_epoch_size)).argmax(axis=1)
-            train_loss, train_error_rate = self._vae_epoch(train_loaders, sentence_length_indices, batch_size, optimizer)
-            train_losses += train_loss
+            train_loss, train_r_loss, train_kld_loss, train_error_rate = self._vae_epoch(train_loaders, sentence_length_indices, batch_size, optimizer)
+            train_losses[0] += train_loss
+            train_losses[1] += train_r_loss
+            train_losses[2] += train_kld_loss
             train_error_rates += train_error_rate
             torch.save(self.encoder, self.encoder_weights)
             torch.save(self.decoder, self.decoder_weights)
@@ -191,8 +193,10 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
                 print('Test')
                 sentence_length_indices = np.random.multinomial(1, \
                         .9999 * test_lengths / float(np.sum(test_lengths)), size=(test_epoch_size)).argmax(axis=1)
-                test_loss, test_error_rate = self._vae_epoch(test_loaders, sentence_length_indices, batch_size, None)
-                test_losses += test_loss
+                test_loss, test_r_loss, test_kld_loss, test_error_rate = self._vae_epoch(test_loaders, sentence_length_indices, batch_size, None)
+                test_losses[0] += test_loss
+                test_losses[1] += test_r_loss
+                test_losses[2] += test_kld_loss
                 test_error_rates += test_error_rate
                 np.save(self.vae_test_loss_path, np.array(test_losses))
                 np.save(self.vae_test_error_path, np.array(test_error_rates))
@@ -200,6 +204,8 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
 
     def _vae_epoch(self, loaders, sentence_length_indices, batch_size, optimizer=None):
         losses = []
+        reconstruction_losses = []
+        kld_losses = []
         error_rates = []
         for index in sentence_length_indices:
             loader = loaders[index]
@@ -209,8 +215,10 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
 
             logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, len(sequence))
 
-            loss = self.vae_loss(logits, sequence_of_indexed_batches, mu, logvar, self.decoder.step_count)
+            loss, reconstruction_loss, kld_loss = self.vae_loss(logits, sequence_of_indexed_batches, mu, logvar, self.decoder.step_count)
             losses.append(loss.cpu().data.numpy())
+            reconstruction_losses.append(reconstruction_loss.cpu().data.numpy())
+            kld_losses.append(kld_loss.cpu().data.numpy())
 
             error_rate = self.vae_error_rate(predictions, sequence_of_indexed_batches)
             error_rates.append(error_rate.cpu().data.numpy())
@@ -224,7 +232,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
 
         print('Mean Loss: {}'.format(np.mean(losses)))
         print('Mean Error Rate: {}'.format(np.mean(error_rates)))
-        return losses, error_rates
+        return losses, reconstruction_losses, kld_losses, error_rates
 
     def _vae_forward(self, sequence_of_embedded_batches, batch_size, sequence_length=None):
         mu, logvar = self.encoder(sequence_of_embedded_batches, batch_size)
