@@ -16,3 +16,7 @@ hvae.train_vae()
 # 	print()
 # 	for sentence in interpolation:
 # 		print(sentence)
+
+sentences, reconstructed_sentences = hvae.test_reconstruction()
+for pair in zip(sentences, reconstructed_sentences):
+	print(pair)

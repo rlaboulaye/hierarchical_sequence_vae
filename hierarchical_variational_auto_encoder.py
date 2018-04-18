@@ -267,3 +267,19 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
                 None, batch_size)
         sentences.append(self._format_sentences(predictions, batch_size))
         return np.array(sentences).T.tolist()
+
+    def test_reconstruction(self):
+        sentences = [
+            "the cat is very hungry .",
+            "`` hello, old friend '' .",
+            "`` he is not coming tonight '' .",
+            "it was a long day for many people .",
+            "the house is on fire ."
+        ]
+        split_sentences = [sentence.split(" ") for sentence in sentences]
+        batch_size = len(sentences)
+        max_sequence_length = max([len(sentence_array) for sentence_array in split_sentences])
+        sequence_of_batches = np.array(split_sentences).T
+        sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence_of_batches]
+        logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, max_sequence_length)
+        return sentences, self._format_sentences(predictions, batch_size)
