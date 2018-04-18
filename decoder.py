@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 from torch import nn
 
@@ -11,6 +13,7 @@ class Decoder(nn.Module):
     def __init__(self, input_dimension=300, output_dimension=1000, hidden_dimension=512, \
             num_layers=3, context_dimension=None):
         super(Decoder, self).__init__()
+        self.max_sequence_length = 20
         self.input_dimension = input_dimension
         self.output_dimension = output_dimension
         self.context_dimension = context_dimension

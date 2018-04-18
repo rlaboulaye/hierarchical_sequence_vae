@@ -1,6 +1,7 @@
 import os
 import time
 import itertools
+import re
 
 import numpy as np
 import torch
@@ -233,3 +234,16 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         logits, predictions = self.decoder(context, self.embeddings, self.embeddings.get_index('.'), \
                 sequence_length, batch_size)
         return logits, predictions, mu, logvar
+
+    def generate_sentence(self, batch_size=16):
+        context = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
+        logits, predictions = self.decoder(context, self.embeddings, self.embeddings.get_index('.'), \
+                None, batch_size)
+        sentences = [[] for i in range(batch_size)]
+        for batch in predictions:
+            np_batch = batch.cpu().data.numpy().reshape(-1)
+            for i in range(len(np_batch)):
+                sentences[i].append(self.embeddings.get_word(np_batch[i]))
+        sentences = [sentence[:-1] if sentence[-2] in set(['!','?']) else sentence for sentence in sentences]
+        sentences = [re.sub(r' (\.)*(?P<capture>([a-z]*\'[a-z]+)|[,;:\.\\?\!"]|(\'\'))', r'\g<capture>', ' '.join(sentence).replace('`` ', '``')) for sentence in sentences]
+        return sentences
