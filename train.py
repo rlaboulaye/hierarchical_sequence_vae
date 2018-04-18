@@ -1,7 +1,7 @@
 from hierarchical_variational_auto_encoder import HierarchicalVariationalAutoEncoder
 
 vocab_size=1000
-use_context_enhanced_rnn = False
+use_context_enhanced_rnn = True
 use_pretrained_weights = False
 hvae = HierarchicalVariationalAutoEncoder(vocab_size=vocab_size, \
 		use_context_enhanced_rnn=use_context_enhanced_rnn, use_pretrained_weights=use_pretrained_weights, \
@@ -11,3 +11,8 @@ hvae.train_vae()
 
 # for sentence in hvae.generate_sentence():
 # 	print(sentence)
+
+# for interpolation in hvae.interpolate():
+# 	print()
+# 	for sentence in interpolation:
+# 		print(sentence)

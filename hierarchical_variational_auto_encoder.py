@@ -26,7 +26,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         input_dimension=300,
         hidden_dimension=512,
         num_layers=3,
-        use_context_enhanced_rnn=False,
+        use_context_enhanced_rnn=True,
         use_pretrained_weights=False,
         min_sentence_length=5,
         max_sentence_length=11,
@@ -239,6 +239,9 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         context = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
         logits, predictions = self.decoder(context, self.embeddings, self.embeddings.get_index('.'), \
                 None, batch_size)
+        return self._format_sentences(predictions, batch_size)
+
+    def _format_sentences(self, predictions, batch_size):
         sentences = [[] for i in range(batch_size)]
         for batch in predictions:
             np_batch = batch.cpu().data.numpy().reshape(-1)
@@ -247,3 +250,20 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         sentences = [sentence[:-1] if sentence[-2] in set(['!','?']) else sentence for sentence in sentences]
         sentences = [re.sub(r' (\.)*(?P<capture>([a-z]*\'[a-z]+)|[,;:\.\\?\!"]|(\'\'))', r'\g<capture>', ' '.join(sentence).replace('`` ', '``')) for sentence in sentences]
         return sentences
+
+    def interpolate(self, steps=8, batch_size=16):
+        context_start = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
+        context_end = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
+        step_size = (context_end - context_start) / float(steps)
+        sentences = []
+        logits, predictions = self.decoder(context_start, self.embeddings, self.embeddings.get_index('.'), \
+                None, batch_size)
+        sentences.append(self._format_sentences(predictions, batch_size))
+        for i in range(steps - 1):
+            logits, predictions = self.decoder(context_start + i * step_size, self.embeddings, \
+                    self.embeddings.get_index('.'), None, batch_size)
+            sentences.append(self._format_sentences(predictions, batch_size))
+        logits, predictions = self.decoder(context_end, self.embeddings, self.embeddings.get_index('.'), \
+                None, batch_size)
+        sentences.append(self._format_sentences(predictions, batch_size))
+        return np.array(sentences).T.tolist()
