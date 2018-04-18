@@ -25,7 +25,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         vocab_size=1000,
         input_dimension=300,
         hidden_dimension=512,
-        num_layers=3,
+        num_layers=2,
         use_context_enhanced_rnn=True,
         use_pretrained_weights=False,
         min_sentence_length=5,
