@@ -1,6 +1,6 @@
 from hierarchical_variational_auto_encoder import HierarchicalVariationalAutoEncoder
 
-vocab_size=1000
+vocab_size=999
 drop_prob = None
 use_context_enhanced_rnn = True
 use_pretrained_weights = False
