@@ -29,7 +29,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         use_context_enhanced_rnn=True,
         use_pretrained_weights=False,
         min_sentence_length=5,
-        max_sentence_length=11,
+        max_sentence_length=9,
         min_paragraph_length=3,
         max_paragraph_length=3,
         max_rows=None,
@@ -278,7 +278,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
 
     def test_reconstruction(self):
         sentences = [
-            "the cat is very hungry .",
+            "the man is very angry .",
             "`` hello, old friend '' .",
             "`` he is not coming tonight '' .",
             "it was a long day for many people .",
