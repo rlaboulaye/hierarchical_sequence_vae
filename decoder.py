@@ -34,9 +34,14 @@ class Decoder(nn.Module):
         for module in self.modules():
             module.apply(initialize_weights)
 
-    def forward(self, context, embedding_dict, eos_index, training_sequence_length=None, batch_size=16):
+    def forward(self, context, embedding_dict, inputs=None, training_sequence_length=None, drop_prob=None, \
+            batch_size=16, eos_token='.', unk_token='<unknown>'):
+        eos_index = embedding_dict.get_index(eos_token)
+        if drop_prob is not None:
+            unk_index = embedding_dict.get_index(unk_token)
+            bernoulli = torch.distributions.Bernoulli(torch.FloatTensor([drop_prob]))
         hidden_tm1 = context.repeat(self.num_layers, 1).view(self.num_layers, batch_size, -1)
-        input_t = get_variable(torch.FloatTensor([embedding_dict[embedding_dict.get_word(eos_index)]] * batch_size))
+        input_t = get_variable(torch.FloatTensor([embedding_dict[eos_token]] * batch_size))
         word_indices = [-1] * batch_size
         sequence_of_indices = []
         sequence_of_logits = []
@@ -52,7 +57,14 @@ class Decoder(nn.Module):
             word_indices = torch.multinomial(probabilities, 1).view(-1)
             sequence_of_logits.append(logits)
             sequence_of_indices.append(word_indices)
-            input_t = get_variable(torch.FloatTensor([embedding_dict[embedding_dict.get_word(word_index)] for word_index in word_indices.cpu().data.numpy()]))
+            if inputs is None:
+                word_indices = word_indices.cpu().data
+            else:
+                word_indices = inputs[len(sequence_of_indices) - 1].cpu().data
+                if drop_prob is not None:
+                    drop_mask = bernoulli.sample_n(batch_size).view(-1).byte()
+                    word_indices[drop_mask] = torch.LongTensor([unk_index] * drop_mask.sum())
+            input_t = get_variable(torch.FloatTensor([embedding_dict[embedding_dict.get_word(word_index)] for word_index in word_indices.numpy()]))
             hidden_tm1 = hidden_t
         return sequence_of_logits, sequence_of_indices
 

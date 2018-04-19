@@ -26,6 +26,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         input_dimension=300,
         hidden_dimension=512,
         num_layers=2,
+        drop_prob=None,
         use_context_enhanced_rnn=True,
         use_pretrained_weights=False,
         min_sentence_length=5,
@@ -43,14 +44,15 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         self.decoder_hidden_dimension = hidden_dimension
         self.guide_hidden_dimension = hidden_dimension
         self.num_layers = num_layers
+        self.drop_prob = drop_prob
         self.use_pretrained_weights = use_pretrained_weights
         self.min_sentence_length = min_sentence_length
         self.max_sentence_length = max_sentence_length
         self.min_paragraph_length = min_paragraph_length
         self.max_paragraph_length = max_paragraph_length
-        self.identifier = '{}tokens_{}smin_{}smax_{}pmin_{}pmax_{}hidden_{}layers_{}'.format(self.vocab_size, \
+        self.identifier = '{}tokens_{}smin_{}smax_{}pmin_{}pmax_{}hidden_{}layers_{}drop_{}'.format(self.vocab_size, \
                 self.min_sentence_length, self.max_sentence_length, self.min_paragraph_length, self.max_paragraph_length, \
-                self.encoder_hidden_dimension, self.num_layers, \
+                self.encoder_hidden_dimension, self.num_layers, 'no' if self.drop_prob is None else round(self.drop_prob * 100), \
                 'contextenhancedrnn' if use_context_enhanced_rnn else 'simplernn')
         self._init_paths()
         self._load_data(max_rows=max_rows, max_sentences_in_paragraph_loading=max_sentences_in_paragraph_loading, \
@@ -213,7 +215,10 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence]
             sequence_of_indexed_batches = [get_variable(torch.LongTensor(self.embeddings.index_batch(batch))) for batch in sequence]
 
-            logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, len(sequence))
+            if optimizer is not None:
+                logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, sequence_of_indexed_batches, len(sequence), self.drop_prob)
+            else:
+                logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, None, len(sequence), None)
 
             loss, reconstruction_loss, kld_loss = self.vae_loss(logits, sequence_of_indexed_batches, mu, logvar, self.decoder.step_count)
             losses.append(loss.cpu().data.numpy())
@@ -234,19 +239,18 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         print('Mean Error Rate: {}'.format(np.mean(error_rates)))
         return losses, reconstruction_losses, kld_losses, error_rates
 
-    def _vae_forward(self, sequence_of_embedded_batches, batch_size, sequence_length=None):
+    def _vae_forward(self, sequence_of_embedded_batches, batch_size, targets=None, sequence_length=None, drop_prob=None):
         mu, logvar = self.encoder(sequence_of_embedded_batches, batch_size)
         z = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
         std = torch.exp(0.5 * logvar)
         context = z * std + mu
-        logits, predictions = self.decoder(context, self.embeddings, self.embeddings.get_index('.'), \
-                sequence_length, batch_size)
+        logits, predictions = self.decoder(context, self.embeddings, targets, \
+                sequence_length, drop_prob, batch_size)
         return logits, predictions, mu, logvar
 
     def generate_sentence(self, batch_size=16):
         context = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
-        logits, predictions = self.decoder(context, self.embeddings, self.embeddings.get_index('.'), \
-                None, batch_size)
+        logits, predictions = self.decoder(context, self.embeddings, batch_size=batch_size)
         return self._format_sentences(predictions, batch_size)
 
     def _format_sentences(self, predictions, batch_size):
@@ -264,15 +268,12 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         context_end = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
         step_size = (context_end - context_start) / float(steps)
         sentences = []
-        logits, predictions = self.decoder(context_start, self.embeddings, self.embeddings.get_index('.'), \
-                None, batch_size)
+        logits, predictions = self.decoder(context_start, self.embeddings, batch_size=batch_size)
         sentences.append(self._format_sentences(predictions, batch_size))
         for i in range(steps - 1):
-            logits, predictions = self.decoder(context_start + i * step_size, self.embeddings, \
-                    self.embeddings.get_index('.'), None, batch_size)
+            logits, predictions = self.decoder(context_start + i * step_size, self.embeddings, batch_size=batch_size)
             sentences.append(self._format_sentences(predictions, batch_size))
-        logits, predictions = self.decoder(context_end, self.embeddings, self.embeddings.get_index('.'), \
-                None, batch_size)
+        logits, predictions = self.decoder(context_end, self.embeddings, batch_size=batch_size)
         sentences.append(self._format_sentences(predictions, batch_size))
         return list(map(list, zip(*sentences)))
 
@@ -289,5 +290,5 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         max_sequence_length = max([len(sentence_array) for sentence_array in split_sentences])
         sequence_of_batches = list(map(list, zip(*split_sentences)))
         sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence_of_batches]
-        logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, max_sequence_length)
+        logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, None, max_sequence_length)
         return sentences, self._format_sentences(predictions, batch_size)
