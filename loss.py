@@ -11,7 +11,7 @@ class SequenceVariationalLoss(nn.Module):
 
 	def __init__(self):
 		super(SequenceVariationalLoss, self).__init__()
-		self.reconstruction_coefficient = 5.
+		self.reconstruction_coefficient = 1.
 		self.reconstruction_loss = CrossEntropyLoss()
 
 	def _get_kld_coefficient(self, i):
