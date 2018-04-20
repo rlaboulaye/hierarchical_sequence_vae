@@ -11,13 +11,13 @@ class SequenceVariationalLoss(nn.Module):
 
 	def __init__(self):
 		super(SequenceVariationalLoss, self).__init__()
-		self.reconstruction_coefficient = 1.
+		self.reconstruction_coefficient = 8.
 		self.reconstruction_loss = CrossEntropyLoss()
 
 	def _get_kld_coefficient(self, i):
 		return (math.tanh((i - 166250) / 40000) + 1) / 2
 
-	def kld_loss(self, mu, logvar, clip_value = 2.):
+	def kld_loss(self, mu, logvar, clip_value = 3.):
 		loss = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)).mean()
 		clip_mask = (loss < clip_value).float()
 		keep_mask = (loss >= clip_value).float()

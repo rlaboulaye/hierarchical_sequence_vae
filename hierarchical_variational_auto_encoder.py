@@ -367,9 +367,41 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
     def generate_sentence(self, batch_size=16):
         context = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
         logits, predictions = self.decoder(context, self.embeddings, batch_size=batch_size)
-        return self._format_sentences(predictions, batch_size)
+        return self._format_sentences(self._to_sentences(predictions, batch_size))
 
-    def _format_sentences(self, predictions, batch_size):
+    def interpolate(self, start_sentence, end_sentence, steps=5):
+        start_split_sentence = start_sentence.split(" ")
+        start_sequence_of_batches = [[word] for word in start_split_sentence]
+        start_sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in start_sequence_of_batches]
+        start_mu, start_logvar = self._encoder_forward(start_sequence_of_embedded_batches, 1)
+
+        end_split_sentence = end_sentence.split(" ")
+        end_sequence_of_batches = [[word] for word in end_split_sentence]
+        end_sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in end_sequence_of_batches]
+        end_mu, end_logvar = self._encoder_forward(end_sequence_of_embedded_batches, 1)
+
+        step_size = (end_mu - start_mu) / float(steps)
+        sentences = [start_sentence]
+        for i in range(steps - 1):
+            logits, predictions = self.decoder(start_mu + i * step_size, self.embeddings, batch_size=1)
+            sentences.extend(self._to_sentences(predictions, 1))
+        sentences.append(end_sentence)
+        return self._format_sentences(sentences)
+
+    def reconstruct(self, sentence):
+        split_sentence = sentence.split(" ")
+        sequence_of_batches = [[word] for word in split_sentence]
+        sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence_of_batches]
+        mu, logvar = self._encoder_forward(sequence_of_embedded_batches, 1)
+        contexts = self._get_context(mu, logvar, 3)
+        logits, mean_predictions = self._decoder_forward(mu, 1)
+        logits, sample_predictions = self._decoder_forward(contexts, 3)
+        return (self._format_sentences([sentence]),
+            self._format_sentences(self._to_sentences(mean_predictions, 1)),
+            self._format_sentences(self._to_sentences(sample_predictions, 3))
+            )
+
+    def _to_sentences(self, predictions, batch_size):
         sentences = [[] for i in range(batch_size)]
         for batch in predictions:
             np_batch = batch.cpu().data.numpy().reshape(-1)
@@ -377,35 +409,8 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
                 sentences[i].append(self.embeddings.get_word(np_batch[i]))
         sentences = [sentence[:-1] if sentence[-2] in set(['!','?']) else sentence for sentence in sentences]
         sentences = [' '.join(sentence).split('.', 1)[0] + '.' for sentence in sentences]
-        sentences = [re.sub(r' (\.)*(?P<capture>([a-z]*\'[a-z]+)|[,;:\.\\?\!"]|(\'\'))', r'\g<capture>', sentence.replace('`` ', '``')) for sentence in sentences]
         return sentences
 
-    def interpolate(self, steps=8, batch_size=16):
-        context_start = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
-        context_end = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
-        step_size = (context_end - context_start) / float(steps)
-        sentences = []
-        logits, predictions = self.decoder(context_start, self.embeddings, batch_size=batch_size)
-        sentences.append(self._format_sentences(predictions, batch_size))
-        for i in range(steps - 1):
-            logits, predictions = self.decoder(context_start + i * step_size, self.embeddings, batch_size=batch_size)
-            sentences.append(self._format_sentences(predictions, batch_size))
-        logits, predictions = self.decoder(context_end, self.embeddings, batch_size=batch_size)
-        sentences.append(self._format_sentences(predictions, batch_size))
-        return list(map(list, zip(*sentences)))
-
-    def test_reconstruction(self):
-        sentences = [
-            "the man is very angry .",
-            "`` hello, old friend '' .",
-            "`` he is not coming tonight '' .",
-            "it was a long day for many people .",
-            "the house is on fire ."
-        ]
-        split_sentences = [sentence.split(" ") for sentence in sentences]
-        batch_size = len(sentences)
-        max_sequence_length = max([len(sentence_array) for sentence_array in split_sentences])
-        sequence_of_batches = list(map(list, zip(*split_sentences)))
-        sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence_of_batches]
-        logits, predictions, mu, logvar = self._vae_forward(sequence_of_embedded_batches, batch_size, None, max_sequence_length)
-        return sentences, self._format_sentences(predictions, batch_size)
+    def _format_sentences(self, sentences):
+        sentences = [re.sub(r' (\.)*(?P<capture>([a-z]*\'[a-z]+)|[,;:\.\\?\!"]|(\'\'))', r'\g<capture>', sentence.replace('`` ', '``')) for sentence in sentences]
+        return sentences
