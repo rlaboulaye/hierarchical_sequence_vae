@@ -260,7 +260,8 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             for i in range(len(np_batch)):
                 sentences[i].append(self.embeddings.get_word(np_batch[i]))
         sentences = [sentence[:-1] if sentence[-2] in set(['!','?']) else sentence for sentence in sentences]
-        sentences = [re.sub(r' (\.)*(?P<capture>([a-z]*\'[a-z]+)|[,;:\.\\?\!"]|(\'\'))', r'\g<capture>', ' '.join(sentence).replace('`` ', '``')) for sentence in sentences]
+        sentences = [' '.join(sentence).split('.', 1)[0] + '.' for sentence in sentences]
+        sentences = [re.sub(r' (\.)*(?P<capture>([a-z]*\'[a-z]+)|[,;:\.\\?\!"]|(\'\'))', r'\g<capture>', sentence.replace('`` ', '``')) for sentence in sentences]
         return sentences
 
     def interpolate(self, steps=8, batch_size=16):
