@@ -68,15 +68,15 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
     def _init_paths(self):
         self.encoder_weights = 'weights/' + self.identifier + '_encoder.weights'
         self.decoder_weights = 'weights/' + self.identifier + '_decoder.weights'
-        self.guide_weights = 'weights/' + self.identifier + '_guide.weights'
+        self.guide_weights = 'weights/' + self.identifier + '_l1guide.weights'
         self.vae_train_loss_path = 'results/{}_vae_train_loss.npy'.format(self.identifier)
         self.vae_test_loss_path = 'results/{}_vae_test_loss.npy'.format(self.identifier)
         self.vae_train_error_path = 'results/{}_vae_train_error.npy'.format(self.identifier)
         self.vae_test_error_path = 'results/{}_vae_test_error.npy'.format(self.identifier)
-        self.guide_train_loss_path = 'results/{}_guide_train_loss.npy'.format(self.identifier)
-        self.guide_test_loss_path = 'results/{}_guide_test_loss.npy'.format(self.identifier)
-        self.guide_train_error_path = 'results/{}_guide_train_error.npy'.format(self.identifier)
-        self.guide_test_error_path = 'results/{}_guide_test_error.npy'.format(self.identifier)
+        self.guide_train_loss_path = 'results/{}_l1guide_train_loss.npy'.format(self.identifier)
+        self.guide_test_loss_path = 'results/{}_l1guide_test_loss.npy'.format(self.identifier)
+        self.guide_train_error_path = 'results/{}_l1guide_train_error.npy'.format(self.identifier)
+        self.guide_test_error_path = 'results/{}_l1guide_test_error.npy'.format(self.identifier)
 
     def _init_encoder(self, use_pretrained_weights):
         if use_pretrained_weights == True and os.path.exists(self.encoder_weights):
@@ -101,6 +101,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
                     self.num_layers, context_dimension)
 
     def _init_guide(self, use_pretrained_weights):
+        self.guide_loss = nn.L1Loss()
         if use_pretrained_weights == True and os.path.exists(self.guide_weights):
             if torch.cuda.is_available():
                 self.guide = torch.load(self.guide_weights)
@@ -175,18 +176,18 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             train_losses = np.load(self.guide_train_loss_path).tolist()
             train_error_rates = np.load(self.guide_train_error_path).tolist()
         else:
-            train_losses = [[],[],[]]
+            train_losses = []
             train_error_rates = []
 
         if self.use_pretrained_weights and os.path.exists(self.guide_test_loss_path) and os.path.exists(self.guide_test_error_path):
             test_losses = np.load(self.guide_test_loss_path).tolist()
             test_error_rates = np.load(self.guide_test_error_path).tolist()
         else:
-            test_losses = [[],[],[]]
+            test_losses = []
             test_error_rates = []
         return train_losses, test_losses, train_error_rates, test_error_rates
 
-    def train_guide(self, num_epochs=40, train_epoch_size=950, test_epoch_size=50, learning_rate=1e-5, batch_size=5):
+    def train_guide(self, num_epochs=80, train_epoch_size=950, test_epoch_size=50, learning_rate=1e-5, batch_size=16):
         optimizer = torch.optim.Adam(self.guide.parameters(), lr=learning_rate)
         train_losses, test_losses, train_error_rates, test_error_rates = self._get_guide_history()
         test_split_ratio = test_epoch_size / float(train_epoch_size + test_epoch_size)
@@ -196,23 +197,15 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         for e in range(num_epochs):
             print('Epoch {}'.format(e))
             print('Train')
-            train_loss, train_r_loss, train_kld_loss, train_error_rate = self._guide_epoch(train_loader, train_epoch_size * batch_size, batch_size, optimizer)
-            train_losses[0] += train_loss
-            train_losses[1] += train_r_loss
-            train_losses[2] += train_kld_loss
-            train_error_rates += train_error_rate
+            train_loss = self._guide_epoch(train_loader, train_epoch_size * batch_size, batch_size, optimizer)
+            train_losses += train_loss
             torch.save(self.guide, self.guide_weights)
             np.save(self.guide_train_loss_path, np.array(train_losses))
-            np.save(self.guide_train_error_path, np.array(train_error_rates))
             if test_epoch_size > 0:
                 print('Test')
-                test_loss, test_r_loss, test_kld_loss, test_error_rate = self._guide_epoch(test_loader, test_epoch_size * batch_size, batch_size, None)
-                test_losses[0] += test_loss
-                test_losses[1] += test_r_loss
-                test_losses[2] += test_kld_loss
-                test_error_rates += test_error_rate
+                test_loss= self._guide_epoch(test_loader, test_epoch_size * batch_size, batch_size, None)
+                test_losses += test_loss
                 np.save(self.guide_test_loss_path, np.array(test_losses))
-                np.save(self.guide_test_error_path, np.array(test_error_rates))
             print('Elapsed Time: {}\n'.format(time.time() - start_time))
 
     def train_vae(self, num_epochs=70, train_epoch_size=4750, test_epoch_size=250, learning_rate=1e-5, batch_size=16):
@@ -294,9 +287,6 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         kld_losses = []
         error_rates = []
         tmp_losses = []
-        tmp_reconstruction_losses = []
-        tmp_kld_losses = []
-        tmp_error_rates = []
         for index in range(num_iterations):
             sequences = next(iter(loader))
             sequence = sequences[0]
@@ -304,43 +294,19 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
             mu, logvar = self._encoder_forward(sequence_of_embedded_batches, 1)
             h_tm1 = get_variable(torch.zeros(self.num_layers, 1, self.guide_hidden_dimension))
             for sequence_i in range(1, len(sequences)):
+                mu = get_variable(mu.data)
+                logvar = get_variable(logvar.data)
                 h_t = self.guide(torch.cat([mu, logvar], dim=1), h_tm1)
-                mu, logvar = h_t[-1].split(self.decoder_hidden_dimension, dim=1)
-                context = self._get_context(mu, logvar, 1)
-                sequence = sequences[sequence_i]
-                sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence]
-                sequence_of_indexed_batches = [get_variable(torch.LongTensor(self.embeddings.index_batch(batch))) for batch in sequence]
-
-                if optimizer is not None:
-                    logits, predictions = self._decoder_forward(context, 1, sequence_of_indexed_batches, len(sequence), self.drop_prob)
-                else:
-                    logits, predictions = self._decoder_forward(context, 1, None, len(sequence), None)
-
-                loss, reconstruction_loss, kld_loss = self.loss(logits, sequence_of_indexed_batches, mu, logvar, self.decoder.step_count)
-
+                predicted_mu, predicted_logvar = h_t[-1].split(self.decoder_hidden_dimension, dim=1)
+                loss = self.guide_loss(torch.cat([predicted_mu, predicted_logvar], dim=1), torch.cat([mu, logvar], dim=1))
                 tmp_losses.append(loss)
-                tmp_reconstruction_losses.append(reconstruction_loss)
-                tmp_kld_losses.append(kld_loss)
-
-                error_rate = self.vae_error_rate(predictions, sequence_of_indexed_batches)
-                tmp_error_rates.append(error_rate)
-
                 mu, logvar = self._encoder_forward(sequence_of_embedded_batches, 1)
                 h_tm1 = h_t
 
             if (index + 1) % batch_size == 0:
                 loss = torch.cat(tmp_losses).mean()
-                reconstruction_loss = torch.cat(tmp_reconstruction_losses).mean()
-                kld_loss = torch.cat(tmp_kld_losses).mean()
-                error_rate = torch.cat(tmp_error_rates).mean()
                 tmp_losses = []
-                tmp_reconstruction_losses = []
-                tmp_kld_losses = []
-                tmp_error_rates = []
                 losses.append(loss.cpu().data.numpy())
-                reconstruction_losses.append(reconstruction_loss.cpu().data.numpy())
-                kld_losses.append(kld_loss.cpu().data.numpy())
-                error_rates.append(error_rate.cpu().data.numpy())
                 if optimizer is not None:
                     optimizer.zero_grad()
                     loss.backward()
