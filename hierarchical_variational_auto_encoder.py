@@ -283,9 +283,6 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
 
     def _guide_epoch(self, loader, num_iterations, batch_size, optimizer=None):
         losses = []
-        reconstruction_losses = []
-        kld_losses = []
-        error_rates = []
         tmp_losses = []
         for index in range(num_iterations):
             sequences = next(iter(loader))
@@ -314,7 +311,7 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
 
         print('Mean Loss: {}'.format(np.mean(losses)))
         print('Mean Error Rate: {}'.format(np.mean(error_rates)))
-        return losses, reconstruction_losses, kld_losses, error_rates
+        return losses
 
     def _encoder_forward(self, sequence_of_embedded_batches, batch_size):
         return self.encoder(sequence_of_embedded_batches, batch_size)
@@ -334,6 +331,35 @@ class HierarchicalVariationalAutoEncoder(nn.Module):
         context = get_variable(torch.randn(batch_size, self.decoder_hidden_dimension))
         logits, predictions = self.decoder(context, self.embeddings, batch_size=batch_size)
         return self._format_sentences(self._to_sentences(predictions, batch_size))
+
+
+
+    def generate_paragraph(self, sentence=None, num_sentences=5):
+        if sentence is None:
+            mu = get_variable(torch.zeros(1, self.decoder_hidden_dimension))
+            logvar = get_variable(torch.ones(1, self.decoder_hidden_dimension))
+        else:
+            print(sentence)
+            split_sentence = sentence.split(" ")
+            sequence_of_batches = [[word] for word in split_sentence]
+            sequence_of_embedded_batches = [get_variable(torch.FloatTensor(self.embeddings.embed_batch(batch))) for batch in sequence_of_batches]
+            mu, logvar = self._encoder_forward(sequence_of_embedded_batches, 1)
+        h_tm1 = get_variable(torch.zeros(self.num_layers, 1, self.guide_hidden_dimension))
+        logits, predictions = self._decoder_forward(mu, 1)
+        # context = self._get_context(mu, logvar, 1)
+        # logits, predictions = self._decoder_forward(context, 1)
+        # print(self._format_sentences(self._to_sentences(predictions, 1)))
+        for i in range(num_sentences):
+            mu = get_variable(mu.data)
+            logvar = get_variable(logvar.data)
+            h_t = self.guide(torch.cat([mu, logvar], dim=1), h_tm1)
+            mu, logvar = h_t[-1].split(self.decoder_hidden_dimension, dim=1)
+            logits, predictions = self._decoder_forward(mu, 1)
+            # context = self._get_context(mu, logvar, 1)
+            # logits, predictions = self._decoder_forward(context, 1)
+            print(self._format_sentences(self._to_sentences(predictions, 1))[0])
+
+
 
     def interpolate(self, start_sentence, end_sentence, steps=5):
         start_split_sentence = start_sentence.split(" ")
